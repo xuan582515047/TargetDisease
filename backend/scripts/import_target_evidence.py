@@ -138,6 +138,38 @@ def build_snapshot(disease_id, name_zh, n_targets, n_evidence):
             "supported_datatypes": supported}
 
 
+def _merge_snapshot(existing: dict, new: dict) -> dict:
+    """把新疾病快照合并进现有快照，按稳定 ID 去重。"""
+    disease_ids = {d["id"] for d in existing["diseases"]}
+    new_diseases = [d for d in new["diseases"] if d["id"] not in disease_ids]
+
+    # 合并靶点：同一基因出现在多个疾病时，合并 disease_scores 与别名
+    targets = {t["id"]: t for t in existing["targets"]}
+    for t in new["targets"]:
+        if t["id"] in targets:
+            old = targets[t["id"]]
+            old.setdefault("disease_scores", {}).update(t.get("disease_scores", {}))
+            aliases = old.setdefault("aliases", [])
+            for a in t.get("aliases", []):
+                if a not in aliases:
+                    aliases.append(a)
+        else:
+            targets[t["id"]] = t
+
+    # 合并证据：按证据 ID 去重
+    evidence = {e["id"]: e for e in existing["evidence"]}
+    for e in new["evidence"]:
+        evidence.setdefault(e["id"], e)
+
+    supported = sorted({e["datatype"] for e in evidence.values()})
+    return {
+        "diseases": existing["diseases"] + new_diseases,
+        "targets": list(targets.values()),
+        "evidence": list(evidence.values()),
+        "supported_datatypes": supported,
+    }
+
+
 def _write_files(data_dir, snapshot):
     data_dir.mkdir(parents=True, exist_ok=True)
     contents = {
@@ -160,7 +192,8 @@ def _write_files(data_dir, snapshot):
     }
     contents["manifest.json"] = json.dumps(manifest, ensure_ascii=False, indent=2)
     for name, text in contents.items():
-        (data_dir / name).write_text(text, encoding="utf-8")
+        # 用 write_bytes 避免 Windows 下换行符被翻译成 CRLF，导致 manifest 哈希与文件不一致
+        (data_dir / name).write_bytes(text.encode("utf-8"))
 
 
 def main():
@@ -169,15 +202,25 @@ def main():
     parser.add_argument("--name-zh", required=True, help="疾病中文展示名")
     parser.add_argument("--targets", type=int, default=40, help="候选靶点数量上限")
     parser.add_argument("--evidence-per-target", type=int, default=10, help="每靶点证据数量上限")
+    parser.add_argument("--merge", action="store_true", help="合并进现有快照（默认覆盖）")
     parser.add_argument("--out", type=Path, default=DATA_DIR, help="输出目录")
     args = parser.parse_args()
 
+    from app.services.evidence_store import EvidenceSnapshotError, load_snapshot  # noqa: E402
+
     snapshot = build_snapshot(args.disease, args.name_zh, args.targets, args.evidence_per_target)
+
+    if args.merge:
+        try:
+            existing = load_snapshot(args.out)
+        except EvidenceSnapshotError:
+            existing = {"diseases": [], "targets": [], "evidence": []}
+        snapshot = _merge_snapshot(existing, snapshot)
+
     _write_files(args.out, snapshot)
 
-    from app.services.evidence_store import load_snapshot  # 激活前校验
-    load_snapshot(args.out)
-    print(f"快照已激活：{snapshot['diseases'][0]['name']}，候选 {len(snapshot['targets'])}，"
+    load_snapshot(args.out)  # 激活前校验
+    print(f"快照已激活：疾病 {len(snapshot['diseases'])} 个，候选 {len(snapshot['targets'])}，"
           f"证据 {len(snapshot['evidence'])} 条，类型 {snapshot['supported_datatypes']}")
 
 

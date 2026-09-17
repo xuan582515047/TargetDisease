@@ -3,27 +3,13 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class TargetAnalysisCreate(BaseModel):
     project_id: uuid.UUID
-    disease_id: str = Field(min_length=1, max_length=128)
     question: str = Field(min_length=10, max_length=1000)
     mechanism_keywords: list[str] = Field(default_factory=list)
-
-
-class RerankRequest(BaseModel):
-    w_a: float
-    w_n: float
-
-    @model_validator(mode="after")
-    def _check_weights(self):
-        if self.w_a < 0 or self.w_n < 0:
-            raise ValueError("权重不能为负")
-        if abs((self.w_a + self.w_n) - 1.0) > 1e-6:
-            raise ValueError("权重之和必须为 1")
-        return self
 
 
 class DiseaseInfo(BaseModel):
@@ -39,15 +25,26 @@ class CatalogOut(BaseModel):
     diseases: list[DiseaseInfo]
 
 
+class DiseaseSearchHit(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    imported: bool = False
+
+
+class DiseaseSearchOut(BaseModel):
+    query: str
+    translated_query: str | None = None
+    diseases: list[DiseaseSearchHit]
+
+
 class NetworkNodeOut(BaseModel):
     id: str
     type: str
     label: str
     gene_id: str | None = None
-    a_score: float | None = None
     n_score: float | None = None
-    fusion_score: float | None = None
-    status: str | None = None
+    relevance_score: float | None = None
 
 
 class NetworkEdgeOut(BaseModel):

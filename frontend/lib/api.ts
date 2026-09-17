@@ -35,26 +35,41 @@ export type Catalog = {
   diseases: DiseaseInfo[];
 };
 
+export type DiseaseSearchHit = {
+  id: string;
+  name: string;
+  description: string | null;
+  imported: boolean;
+};
+
 export type TargetCandidate = {
   target_id: string;
   node_id: string | null;
   symbol: string | null;
   source: "seed" | "extended";
   reason: string | null;
-  evidence_ids: string[];
-  valid_evidence_ids: string[];
-  status: string | null;
-  status_label: string | null;
-  a_score: number | null;
   n_score: number | null;
-  fusion_score: number | null;
-  has_evidence: boolean | null;
+  relevance_score: number | null;
+  mechanism: string | null;
   in_network: boolean | null;
+  review_decision?: string | null;
+  review_comment?: string | null;
+};
+
+export type AgentTrace = {
+  key: string;
+  name: string;
+  status: "completed" | "fallback" | "failed";
+  summary: string;
+  output: unknown;
+  model: string | null;
+  duration_ms: number;
+  total_tokens: number | null;
+  error: string | null;
 };
 
 export type TargetAnalysisResult = {
-  disease_id: string;
-  disease: { id: string; name_zh: string; name: string };
+  disease: { name: string; id: string };
   question: string;
   question_summary: string;
   seeds: TargetCandidate[];
@@ -62,25 +77,25 @@ export type TargetAnalysisResult = {
   candidates: TargetCandidate[];
   rankings: {
     model: TargetCandidate[];
-    evidence: TargetCandidate[];
-    fusion: TargetCandidate[];
-    exploratory: TargetCandidate[];
-  };
-  stability: {
-    leave_one_out: { applicable: boolean; reason?: string; candidates: unknown[] } | null;
-    weight_sensitivity: { candidates: unknown[]; configs?: number } | null;
-    degree_baseline?: unknown[];
+    extended: TargetCandidate[];
+    all: TargetCandidate[];
   };
   limitations: string[];
   hypotheses: string[];
+  agents?: AgentTrace[];
   report_markdown: string;
   candidates_csv: string;
   network_error?: string | null;
   model_name?: string;
   prompt_version?: string;
-  evidence_snapshot_version?: string;
-  network_snapshot_version?: string | null;
-  params?: { alpha: number; max_iter: number; tol: number; w_a: number; w_n: number };
+  params?: {
+    alpha: number;
+    max_iter: number;
+    tol: number;
+    string_threshold: number;
+    string_hops: number;
+    max_nodes: number;
+  };
   generated_at?: string;
 };
 
@@ -103,10 +118,8 @@ export type NetworkNode = {
   type: string;
   label: string;
   gene_id: string | null;
-  a_score: number | null;
   n_score: number | null;
-  fusion_score: number | null;
-  status: string | null;
+  relevance_score: number | null;
 };
 
 export type NetworkEdge = {
@@ -231,9 +244,12 @@ export const api = {
 
   targetAnalysis: {
     catalog: () => request<Catalog>("/api/v1/target-analysis/catalog"),
+    searchDiseases: (q: string, size = 20) =>
+      request<{ query: string; translated_query?: string | null; diseases: DiseaseSearchHit[] }>(
+        `/api/v1/target-analysis/disease-search?q=${encodeURIComponent(q)}&size=${size}`
+      ),
     create: (data: {
       project_id: string;
-      disease_id: string;
       question: string;
       mechanism_keywords?: string[];
     }) =>
@@ -242,11 +258,6 @@ export const api = {
         body: JSON.stringify(data),
       }),
     get: (id: string) => request<Run>(`/api/v1/target-analysis/runs/${id}`),
-    rerank: (id: string, w_a: number, w_n: number) =>
-      request<unknown>(`/api/v1/target-analysis/runs/${id}/rerank`, {
-        method: "POST",
-        body: JSON.stringify({ w_a, w_n }),
-      }),
     network: (id: string, params?: { threshold?: number; layers?: number; include_background?: boolean }) => {
       const qs = new URLSearchParams();
       if (params?.threshold != null) qs.set("threshold", String(params.threshold));

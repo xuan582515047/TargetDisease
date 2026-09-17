@@ -30,25 +30,19 @@ export default function NetworkDetails({ node, edge, onClose, onAddCompare }: Pr
               <p className="mt-1 font-semibold">{typeLabel(node.type)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">基因 / 标识</p>
-              <p className="mt-1 font-mono text-xs">{node.gene_id || node.id}</p>
+              <p className="text-xs text-muted-foreground">基因</p>
+              <p className="mt-1 font-semibold">{node.label}</p>
             </div>
-            {node.a_score != null && (
-              <div><p className="text-xs text-muted-foreground">疾病关联分 A</p><p className="mt-1">{node.a_score.toFixed(3)}</p></div>
+            {node.relevance_score != null && (
+              <div><p className="text-xs text-muted-foreground">相关度分</p><p className="mt-1">{node.relevance_score.toFixed(3)}</p></div>
             )}
             {node.n_score != null && (
               <div><p className="text-xs text-muted-foreground">网络分 N</p><p className="mt-1">{node.n_score.toFixed(3)}</p></div>
             )}
-            {node.fusion_score != null && (
-              <div><p className="text-xs text-muted-foreground">融合分</p><p className="mt-1 font-semibold text-primary">{node.fusion_score.toFixed(1)}</p></div>
-            )}
-            {node.status && (
-              <div><p className="text-xs text-muted-foreground">核查状态</p><p className="mt-1">{node.status}</p></div>
-            )}
             {node.type !== "disease" && onAddCompare && (
               <button
                 type="button"
-                onClick={() => onAddCompare(node.gene_id || node.id)}
+                onClick={() => onAddCompare(node.label || node.id)}
                 className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary/30 px-3 py-2 text-xs text-primary transition-colors hover:bg-primary/5"
               >
                 <Scale size={14} /> 加入对比
@@ -58,7 +52,7 @@ export default function NetworkDetails({ node, edge, onClose, onAddCompare }: Pr
         )}
         {edge && (
           <>
-            <div><p className="text-xs text-muted-foreground">关系类型</p><p className="mt-1 font-semibold">{edge.type === "evidence" ? "疾病—靶点证据" : "蛋白功能关联"}</p></div>
+            <div><p className="text-xs text-muted-foreground">关系类型</p><p className="mt-1 font-semibold">蛋白功能关联</p></div>
             <div><p className="text-xs text-muted-foreground">来源分值</p><p className="mt-1">{edge.score.toFixed(3)}</p></div>
             {edge.source_id && <div><p className="text-xs text-muted-foreground">来源记录</p><p className="mt-1 font-mono text-xs">{edge.source_id}</p></div>}
             {edge.version && <div><p className="text-xs text-muted-foreground">版本</p><p className="mt-1">{edge.version}</p></div>}

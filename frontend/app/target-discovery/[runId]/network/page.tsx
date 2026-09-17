@@ -91,7 +91,7 @@ export default function NetworkPage() {
         <div>
           <p className="text-sm font-semibold">生物关联网络</p>
           <p className="text-xs text-muted-foreground">
-            {run?.results_json?.disease?.name_zh ?? "当前疾病"} · 分析 {runId.slice(0, 8)}
+            {run?.results_json?.disease?.name ?? "当前疾病"} · 分析 {runId.slice(0, 8)}
           </p>
         </div>
         <form onSubmit={onSearch} className="ml-auto flex items-center gap-2">

@@ -1,28 +1,21 @@
-"""图展示数据：类型化节点/边、阈值/层数筛选、统计。
+"""图展示数据：由分析结果的动态网络构建类型化节点/边，做阈值/层数筛选。
 
-计算与显示分离：图算法只用固定快照与计算参数；本模块只做展示层的节点/边
+计算与显示分离：图算法只用于分析时的传播；本模块只做展示层的节点/边
 类型化与筛选，不重跑传播、不调模型、不改排名。
 """
 from __future__ import annotations
 
-from collections import deque
-
-DISEASE_NODE_PREFIX = "disease:"
+from collections import defaultdict, deque
 
 
-def build_typed_graph(network_store, evidence_store, disease_id: str, results: dict) -> dict:
-    """构建完整类型化图（疾病 + 种子/扩展/背景节点 + 证据/关联边）。"""
-    disease = evidence_store.disease(disease_id)
-    disease_node = f"{DISEASE_NODE_PREFIX}{disease_id}"
-    nodes = [{"id": disease_node, "type": "disease",
-              "label": (disease or {}).get("name_zh", disease_id),
-              "gene_id": None, "a_score": None, "n_score": None,
-              "fusion_score": None, "status": None}]
-
+def build_typed_graph(results: dict) -> dict:
+    """从 results 的动态网络构建类型化图（种子/扩展/背景节点 + 关联边）。"""
+    net = results.get("network") or {"nodes": [], "edges": []}
     seed_meta = {s["node_id"]: s for s in results.get("seeds", []) if s.get("node_id")}
     extended_meta = {c["node_id"]: c for c in results.get("extended_candidates", []) if c.get("node_id")}
 
-    for n in network_store.nodes():
+    nodes = []
+    for n in net["nodes"]:
         nid = n["id"]
         if nid in seed_meta:
             ntype, meta = "seed", seed_meta[nid]
@@ -31,25 +24,25 @@ def build_typed_graph(network_store, evidence_store, disease_id: str, results: d
         else:
             ntype, meta = "background", {}
         nodes.append({
-            "id": nid, "type": ntype, "label": n["symbol"], "gene_id": n.get("gene_id"),
-            "a_score": meta.get("a_score"), "n_score": meta.get("n_score"),
-            "fusion_score": meta.get("fusion_score"), "status": meta.get("status"),
+            "id": nid, "type": ntype, "label": n.get("symbol") or nid, "gene_id": None,
+            "n_score": meta.get("n_score"), "relevance_score": meta.get("relevance_score"),
         })
 
-    edges = []
-    # 证据边：疾病节点 → 有疾病证据的靶点节点
-    for nid, meta in {**seed_meta, **extended_meta}.items():
-        if meta.get("has_evidence") and meta.get("a_score") is not None:
-            edges.append({"id": f"ev:{disease_id}:{nid}", "source": disease_node, "target": nid,
-                          "type": "evidence", "score": meta["a_score"], "source_id": None,
-                          "version": None})
-    # 关联边：蛋白功能关联
-    for e in network_store.edges():
-        edges.append({"id": f"{e['source']}::{e['target']}", "source": e["source"],
-                      "target": e["target"], "type": "association", "score": e["score"],
-                      "source_id": None, "version": network_store.manifest.get("source_version")})
-
+    edges = [
+        {"id": f"{e['source']}::{e['target']}", "source": e["source"], "target": e["target"],
+         "type": "association", "score": e["score"], "source_id": None, "version": None}
+        for e in net["edges"]
+    ]
     return {"nodes": nodes, "edges": edges}
+
+
+def adjacency_from_edges(edges: list[dict]) -> dict[str, list[tuple[str, float]]]:
+    """由边列表构建无向邻接表。"""
+    adj: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    for e in edges:
+        adj[e["source"]].append((e["target"], e["score"]))
+        adj[e["target"]].append((e["source"], e["score"]))
+    return dict(adj)
 
 
 def _bfs_layers(adjacency: dict, seed_ids: set[str], max_layer: int) -> set[str]:
@@ -73,21 +66,18 @@ def filter_view(graph: dict, adjacency: dict | None, *,
                 max_nodes: int = 100, max_edges: int = 500) -> dict:
     """应用显示筛选：阈值、层数、背景开关与显示上限。"""
     seed_ids = {n["id"] for n in graph["nodes"] if n["type"] == "seed"}
-    disease_ids = {n["id"] for n in graph["nodes"] if n["type"] == "disease"}
 
-    keep_nodes = set(disease_ids)
+    keep_nodes: set[str] = set()
     if adjacency is not None and seed_ids:
         keep_nodes |= _bfs_layers(adjacency, seed_ids, layers)
     else:
         keep_nodes |= {n["id"] for n in graph["nodes"] if n["type"] in ("seed", "extended")}
 
-    # 先按阈值过滤关联边
-    edges = [e for e in graph["edges"]
-             if e["type"] == "evidence" or (e["type"] == "association" and e["score"] >= threshold)]
+    edges = [e for e in graph["edges"] if e["type"] == "association" and e["score"] >= threshold]
 
     nodes = []
     for n in graph["nodes"]:
-        if n["type"] == "disease" or n["type"] == "seed" or n["type"] == "extended":
+        if n["type"] in ("seed", "extended"):
             nodes.append(n)
         elif n["type"] == "background" and include_background and n["id"] in keep_nodes:
             nodes.append(n)
@@ -98,8 +88,7 @@ def filter_view(graph: dict, adjacency: dict | None, *,
     total_nodes = len(nodes)
     total_edges = len(edges)
     truncated = total_nodes > max_nodes or total_edges > max_edges
-    # 优先保留种子/扩展/疾病，再按边分值确定性裁剪
-    priority = {"disease": 0, "seed": 1, "extended": 2, "background": 3}
+    priority = {"seed": 0, "extended": 1, "background": 2}
     nodes.sort(key=lambda n: (priority.get(n["type"], 9), n["id"]))
     nodes = nodes[:max_nodes]
     keep = {n["id"] for n in nodes}

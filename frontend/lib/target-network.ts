@@ -39,10 +39,8 @@ export function buildElements(view: NetworkView): NetworkElements {
       label: n.label,
       type: n.type,
       geneId: n.gene_id ?? "",
-      aScore: n.a_score,
       nScore: n.n_score,
-      fusionScore: n.fusion_score,
-      status: n.status ?? "",
+      relevanceScore: n.relevance_score,
     },
   }));
   const edges = view.edges.map((e) => ({

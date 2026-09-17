@@ -73,6 +73,15 @@ def validate(db: Session = Depends(get_db), user: User = Depends(require_user)):
         raise HTTPException(status_code=404, detail="尚未配置 DeepSeek API Key")
     try:
         api_key = encryption.decrypt(cred.api_key_ciphertext, cred.nonce)
+    except Exception:
+        cred.is_validated = False
+        cred.validated_at = None
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail="密钥解密失败，主密钥可能已变更，请删除后重新保存 API Key",
+        ) from None
+    try:
         validate_key(api_key)
     except DeepSeekError as e:
         cred.is_validated = False

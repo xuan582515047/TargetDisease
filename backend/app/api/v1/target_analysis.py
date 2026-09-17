@@ -4,7 +4,6 @@
 - GET  /catalog
 - POST /runs
 - GET  /runs/{id}
-- POST /runs/{id}/rerank
 - GET  /runs/{id}/network
 - GET  /runs/{id}/stability
 - GET  /runs/{id}/report
@@ -23,14 +22,16 @@ from app.deps import require_user
 from app.schemas import RunOut
 from app.services import network_view as nv
 from app.services import target_analysis as ta
-from app.services import target_ranking as tr
 from app.services.evidence_store import EvidenceStore
-from app.services.network_store import NetworkSnapshotError, NetworkStore
+from app.services.opentargets_client import OpenTargetsError, search_diseases
+from app.services.deepseek import DeepSeekError
+from app.services.disease_translate import is_chinese, translate_to_english
 from app.target_analysis_schemas import (
     CatalogOut,
     DiseaseInfo,
+    DiseaseSearchHit,
+    DiseaseSearchOut,
     NetworkOut,
-    RerankRequest,
     TargetAnalysisCreate,
 )
 
@@ -55,13 +56,52 @@ def catalog(db: Session = Depends(get_db), user: User = Depends(require_user)):
     )
 
 
+@router.get("/disease-search", response_model=DiseaseSearchOut)
+def disease_search(
+    q: str = Query(min_length=1, max_length=128),
+    size: int = Query(default=20, ge=1, le=50),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """按名称实时检索 Open Targets 疾病，用于发现尚未收录的疾病。
+
+    中文输入先经 DeepSeek 翻译为英文标准名再检索；未配置模型凭据或翻译
+    失败时，回退到用原始输入检索。
+    """
+    search_q = q
+    translated_query = None
+    if is_chinese(q):
+        try:
+            api_key = ta.decrypt_credential(db, user.id)
+            search_q = translate_to_english(api_key, q)
+            if search_q and search_q != q:
+                translated_query = search_q
+        except (ValueError, DeepSeekError):
+            search_q = q
+
+    try:
+        hits = search_diseases(search_q, size)
+    except OpenTargetsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    imported = {d["id"] for d in EvidenceStore().diseases()}
+    return DiseaseSearchOut(
+        query=q,
+        translated_query=translated_query,
+        diseases=[
+            DiseaseSearchHit(
+                id=h.get("id", ""),
+                name=h.get("name") or h.get("id", ""),
+                description=h.get("description"),
+                imported=h.get("id") in imported,
+            )
+            for h in hits
+        ],
+    )
+
+
 @router.post("/runs", response_model=RunOut, status_code=202)
 def create_run(body: TargetAnalysisCreate, background_tasks: BackgroundTasks,
                db: Session = Depends(get_db), user: User = Depends(require_user)):
-    store = EvidenceStore()
-    if store.disease(body.disease_id) is None:
-        raise HTTPException(status_code=400, detail="不支持的疾病，请从目录中选择")
-
     project = db.get(Project, body.project_id)
     if project is None or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="项目不存在")
@@ -92,7 +132,6 @@ def create_run(body: TargetAnalysisCreate, background_tasks: BackgroundTasks,
         workflow_version=ta.WORKFLOW_VERSION,
         model_name="deepseek-chat",
         intermediate_json={
-            "disease_id": body.disease_id,
             "question": body.question,
             "mechanism_keywords": body.mechanism_keywords,
         },
@@ -110,21 +149,6 @@ def get_run(run_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depen
     return _owned_run(db, user, run_id)
 
 
-@router.post("/runs/{run_id}/rerank", response_model=dict)
-def rerank(run_id: uuid.UUID, body: RerankRequest, db: Session = Depends(get_db),
-           user: User = Depends(require_user)):
-    run = _owned_run(db, user, run_id)
-    if not run.results_json:
-        raise HTTPException(status_code=409, detail="尚无结果，无法重排")
-    candidates = run.results_json.get("candidates", [])
-    rankings = tr.rank(candidates, body.w_a)
-    run.results_json["rankings"] = rankings
-    run.results_json["params"] = {**(run.results_json.get("params") or {}),
-                                  "w_a": body.w_a, "w_n": body.w_n}
-    db.commit()
-    return rankings
-
-
 @router.get("/runs/{run_id}/network", response_model=NetworkOut)
 def get_network(run_id: uuid.UUID, threshold: float = Query(0.7, ge=0, le=1),
                 layers: int = Query(2, ge=1, le=2),
@@ -133,14 +157,9 @@ def get_network(run_id: uuid.UUID, threshold: float = Query(0.7, ge=0, le=1),
     run = _owned_run(db, user, run_id)
     if not run.results_json:
         raise HTTPException(status_code=404, detail="尚无网络结果")
-    try:
-        network_store = NetworkStore()
-    except NetworkSnapshotError:
-        raise HTTPException(status_code=404, detail="网络快照未激活") from None
-    evidence_store = EvidenceStore()
-    graph = nv.build_typed_graph(network_store, evidence_store,
-                                 run.results_json["disease_id"], run.results_json)
-    view = nv.filter_view(graph, network_store.adjacency(), threshold=threshold,
+    graph = nv.build_typed_graph(run.results_json)
+    adjacency = nv.adjacency_from_edges((run.results_json.get("network") or {}).get("edges", []))
+    view = nv.filter_view(graph, adjacency, threshold=threshold,
                           layers=layers, include_background=include_background)
     return NetworkOut(**view)
 

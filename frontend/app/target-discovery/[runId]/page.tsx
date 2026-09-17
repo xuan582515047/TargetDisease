@@ -8,6 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api, type Run, type TargetCandidate } from "@/lib/api";
+import CountUp from "@/components/count-up";
+import AgentSteps from "@/components/agent-steps";
+import Tip from "@/components/tip";
 
 const STATUS_LABEL: Record<string, string> = {
   queued: "排队中",
@@ -16,19 +19,15 @@ const STATUS_LABEL: Record<string, string> = {
   failed: "失败",
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  passed: "bg-emerald-100 text-emerald-700",
-  partial: "bg-amber-100 text-amber-700",
-  missing: "bg-muted text-muted-foreground",
-  id_mismatch: "bg-red-100 text-red-700",
-};
+const TIP_RELEVANCE = "由大模型给出的 0~1 匹配度评分，表示该靶点与研究问题的相关程度";
+const TIP_NETWORK = "该靶点在本次 STRING 蛋白功能关联网络上做个性化 PageRank 传播得到的归一化得分（0~1），表示它与种子靶点的网络接近程度。只在本次分析内可比，不代表致病概率或因果关系。";
 
 export default function RunResultPage() {
   const params = useParams<{ runId: string }>();
   const router = useRouter();
   const runId = params.runId;
   const [run, setRun] = useState<Run | null>(null);
-  const [view, setView] = useState<"model" | "evidence" | "fusion">("fusion");
+  const [view, setView] = useState<"model" | "extended">("model");
   const [compare, setCompare] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
@@ -63,8 +62,7 @@ export default function RunResultPage() {
     if (!run?.results_json) return [];
     const r = run.results_json;
     if (view === "model") return r.rankings.model;
-    if (view === "evidence") return r.rankings.evidence;
-    return r.rankings.fusion;
+    return r.rankings.extended;
   }, [run, view]);
 
   function toggleCompare(id: string) {
@@ -84,7 +82,7 @@ export default function RunResultPage() {
       <div className="workspace-heading">
         <div>
           <p className="workspace-eyebrow">RUN RESULT / 分析结果</p>
-          <h1>{run?.results_json?.disease?.name_zh ?? "靶点优选分析"}</h1>
+          <h1>{run?.results_json?.disease?.name ?? "靶点优选分析"}</h1>
           <p>分析编号 {runId.slice(0, 8)} · {run ? STATUS_LABEL[run.status] ?? run.status : "加载中…"}</p>
         </div>
         <div className="flex gap-2">
@@ -133,14 +131,18 @@ export default function RunResultPage() {
               <CardDescription>{run.results_json.question_summary || run.results_json.question}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-6 text-sm">
-              <span>种子靶点 <b className="text-primary">{run.results_json.seeds.length}</b></span>
-              <span>扩展候选 <b className="text-primary">{run.results_json.extended_candidates.length}</b></span>
-              <span>证据快照 v{run.results_json.evidence_snapshot_version}</span>
+              <span>疾病 <b className="text-primary">{run.results_json.disease.name}</b>
+                {run.results_json.disease.id && <code className="ml-1 text-xs text-muted-foreground">{run.results_json.disease.id}</code>}
+              </span>
+              <span>种子靶点 <b className="text-primary"><CountUp value={run.results_json.seeds.length} /></b></span>
+              <span>扩展候选 <b className="text-primary"><CountUp value={run.results_json.extended_candidates.length} /></b></span>
               {run.results_json.network_error && (
                 <span className="text-amber-600">网络：{run.results_json.network_error}</span>
               )}
             </CardContent>
           </Card>
+
+          <AgentSteps agents={run.results_json.agents ?? []} />
 
           <Card>
             <CardHeader>
@@ -148,9 +150,8 @@ export default function RunResultPage() {
                 <CardTitle>候选靶点</CardTitle>
                 <div className="flex rounded-lg border border-border bg-secondary p-0.5">
                   {([
-                    ["model", "模型推荐"],
-                    ["evidence", "疾病证据"],
-                    ["fusion", "融合排序"],
+                    ["model", "模型种子"],
+                    ["extended", "网络扩展"],
                   ] as const).map(([key, label]) => (
                     <button
                       key={key}
@@ -165,6 +166,9 @@ export default function RunResultPage() {
                   ))}
                 </div>
               </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                勾选左侧方框选择候选（最多 4 个），右下角悬浮按钮发起对比。
+              </p>
             </CardHeader>
             <CardContent className="space-y-2">
               {candidates.length === 0 && (
@@ -176,14 +180,16 @@ export default function RunResultPage() {
             </CardContent>
           </Card>
 
-          <div className="flex items-center justify-end gap-3">
-            <span className="text-xs text-muted-foreground">已选 {compare.size} 个靶点</span>
-            <Link href={`/target-discovery/${runId}/compare?ids=${[...compare].join(",")}`}>
-              <Button variant="outline" size="sm" disabled={compare.size < 2}>
-                <Scale size={15} /> 对比所选
-              </Button>
-            </Link>
-          </div>
+          <Link
+            href={`/target-discovery/${runId}/compare?ids=${[...compare].join(",")}`}
+            className={`compare-fab ${compare.size >= 2 ? "compare-fab-ready" : "compare-fab-idle"}`}
+            aria-disabled={compare.size < 2}
+            onClick={(e) => { if (compare.size < 2) e.preventDefault(); }}
+          >
+            <span className="compare-fab-count">{compare.size}</span>
+            <Scale size={18} />
+            <span>{compare.size >= 2 ? "对比所选候选" : "请至少选择 2 个"}</span>
+          </Link>
         </>
       )}
     </div>
@@ -199,7 +205,6 @@ function CandidateRow({
   checked: boolean;
   onToggle: (id: string) => void;
 }) {
-  const badge = STATUS_BADGE[c.status ?? ""] ?? STATUS_BADGE.missing;
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
       <input
@@ -215,17 +220,21 @@ function CandidateRow({
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
             {c.source === "seed" ? "种子" : "扩展"}
           </span>
-          {c.status_label && (
-            <span className={`rounded-full px-2 py-0.5 text-xs ${badge}`}>{c.status_label}</span>
-          )}
         </div>
         {c.reason && <p className="mt-1 text-xs text-muted-foreground">{c.reason}</p>}
-        <p className="mt-1 font-mono text-xs text-muted-foreground">{c.target_id}</p>
+        {c.mechanism && <p className="mt-1 text-xs text-muted-foreground">机制：{c.mechanism}</p>}
       </div>
-      <div className="flex shrink-0 gap-4 text-right text-sm">
-        <div><p className="text-xs text-muted-foreground">疾病分A</p><p>{c.a_score != null ? c.a_score.toFixed(2) : "—"}</p></div>
-        <div><p className="text-xs text-muted-foreground">网络分N</p><p>{c.n_score != null ? c.n_score.toFixed(2) : "—"}</p></div>
-        <div><p className="text-xs text-muted-foreground">融合分</p><p className="font-semibold text-primary">{c.fusion_score != null ? c.fusion_score.toFixed(1) : "—"}</p></div>
+      <div className="flex shrink-0 items-start gap-4 text-right text-sm">
+        {c.relevance_score != null && (
+          <Tip content={TIP_RELEVANCE}>
+            <div className="text-xs text-muted-foreground">相关度分</div>
+            <div>{c.relevance_score.toFixed(2)}</div>
+          </Tip>
+        )}
+        <Tip content={TIP_NETWORK}>
+          <div className="text-xs text-muted-foreground">网络分N</div>
+          <div className="font-semibold text-primary">{c.n_score != null ? c.n_score.toFixed(2) : "—"}</div>
+        </Tip>
       </div>
     </div>
   );

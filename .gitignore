@@ -4,6 +4,7 @@
 !.env.example
 *.pem
 *.key
+docs/
 
 # ===== Python =====
 __pycache__/

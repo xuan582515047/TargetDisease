@@ -40,7 +40,7 @@ export default function ReportPage() {
         <div>
           <p className="workspace-eyebrow">REPORT / 研究报告</p>
           <h1>分析报告</h1>
-          <p>{run?.results_json?.disease?.name_zh ?? ""} · 预览与下载</p>
+          <p>{run?.results_json?.disease?.name ?? ""} · 预览与下载</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => download(`report_${runId}.md`, markdown, "text/markdown;charset=utf-8")}>
