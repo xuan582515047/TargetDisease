@@ -23,13 +23,13 @@ export default function Sidebar() {
 
   return (
     <aside className="workspace-sidebar">
-      <div className="flex items-center gap-3 border-b border-white/15 px-5 py-5">
-        <span className="grid size-10 place-items-center rounded-xl bg-white/10">
+      <div className="flex items-center gap-3 border-b border-border px-5 py-5">
+        <span className="grid size-10 place-items-center rounded-xl bg-secondary">
           <Network size={21} />
         </span>
         <div className="min-w-0">
           <div className="truncate text-base font-semibold leading-tight">靶研助手</div>
-          <div className="mt-1 text-[9px] tracking-widest text-white/45">TARGET EXPLORER</div>
+          <div className="mt-1 text-[9px] tracking-widest text-muted-foreground">TARGET EXPLORER</div>
         </div>
       </div>
 
@@ -49,8 +49,8 @@ export default function Sidebar() {
                   aria-current={active ? "page" : undefined}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                     active
-                      ? "bg-white/20 font-medium text-white shadow-sm"
-                      : "text-teal-50/80 hover:bg-white/10 hover:text-white"
+                      ? "bg-accent font-medium text-accent-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
                   }`}
                 >
                   <Icon size={18} strokeWidth={1.6} />
@@ -62,8 +62,8 @@ export default function Sidebar() {
               返回首页 <ArrowUpRight size={15} />
             </Link>
           </nav>
-          <div className="border-t border-white/15 px-5 py-4">
-            <div className="truncate text-sm text-teal-50/90" title={user.email}>
+          <div className="border-t border-border px-5 py-4">
+            <div className="truncate text-sm text-foreground" title={user.email}>
               {user.email}
             </div>
             <button
@@ -71,7 +71,7 @@ export default function Sidebar() {
                 await api.logout().catch(() => {});
                 window.location.href = "/login";
               }}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-medium transition-colors hover:bg-white/20"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-secondary px-3 py-2 text-xs font-medium transition-colors hover:bg-accent"
             >
               <LogOut size={14} /> 退出登录
             </button>
@@ -79,10 +79,10 @@ export default function Sidebar() {
         </>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5">
-          <p className="text-sm text-teal-50/80">登录后开始靶点识别</p>
+          <p className="text-sm text-muted-foreground">登录后开始靶点识别</p>
           <Link
             href="/login"
-            className="w-full rounded-lg bg-white/15 px-3 py-2 text-center text-sm font-medium hover:bg-white/25"
+            className="w-full rounded-lg bg-secondary px-3 py-2 text-center text-sm font-medium hover:bg-accent"
           >
             登录 / 注册
           </Link>

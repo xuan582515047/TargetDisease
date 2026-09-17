@@ -16,6 +16,10 @@
 
 ## 启动
 
+Windows 本地运行（无需 Docker）：参见 [本地启动与比赛演示](docs/LOCAL-DEMO.md)，环境准备好后执行 `./start-local.ps1`，访问 http://localhost:3001 。
+
+以下为原有 Docker 部署方式：
+
 1. 复制 `.env.example` 为 `.env`，填入 `APP_SECRET_KEY` 与 `APP_CREDENTIAL_MASTER_KEY`。
    - `APP_SECRET_KEY`：`python -c "import secrets; print(secrets.token_urlsafe(48))"`
    - `APP_CREDENTIAL_MASTER_KEY`：`python -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`

@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./science.css";
+import "./research-space.css";
+import "./studio.css";
 import { Toaster } from "sonner";
 import AppShell from "@/components/app-shell";
 

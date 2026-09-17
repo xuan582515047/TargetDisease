@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import AuthShell from "@/components/auth-shell";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,9 +24,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem("registered")) {
+      // One-time hydration from browser session storage, unavailable during SSR.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInfo("注册成功，请登录");
       sessionStorage.removeItem("registered");
     }
@@ -51,8 +55,8 @@ export default function LoginPage() {
       <Card className="auth-card">
         <CardHeader>
           <span className="auth-eyebrow">WELCOME BACK</span>
-          <CardTitle><h1>欢迎回来</h1></CardTitle>
-          <CardDescription>登录账户，继续你的研究探索。</CardDescription>
+          <CardTitle><h1>登录靶研助手</h1></CardTitle>
+          <CardDescription>使用邮箱和密码登录。</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
@@ -70,20 +74,21 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">密码</Label>
-              <Input
+              <div className="password-field"><Input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="请输入密码"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
+              <button type="button" className="password-toggle" aria-label={showPassword ? "隐藏密码" : "显示密码"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>
             </div>
             {info && <p role="status" className="text-sm text-emerald-600 dark:text-emerald-400">{info}</p>}
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "登录中…" : "登录并开始探索"}
+              {loading ? "登录中…" : "登录"}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
               还没有账户？{" "}
