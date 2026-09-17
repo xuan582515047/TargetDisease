@@ -1,0 +1,41 @@
+# ===== 敏感信息 =====
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ===== 项目产物 =====
+backend/artifacts/
+backend/data/raw-cache/
+*.log
+
+# ===== Node / Next.js =====
+node_modules/
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+.vercel
+
+# ===== 编辑器 / 系统 =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ===== Docker 卷数据 =====
+postgres_data/
+scientific_artifacts/

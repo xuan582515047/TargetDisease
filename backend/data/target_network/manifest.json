@@ -1,0 +1,18 @@
+{
+  "version": "1",
+  "fetch_date": "2026-09-16",
+  "source": "STRING",
+  "source_version": "12.0",
+  "source_url": "https://string-db.org/",
+  "api_endpoint": "https://string-db.org/api/tsv",
+  "license": "CC BY 4.0",
+  "species": 9606,
+  "threshold": 0.7,
+  "hops": 2,
+  "ambiguous_mappings": [],
+  "score_semantics": "edges[].score 为 STRING combined_score 归一化到 0~1 的功能关联置信分，表示功能关联概率估计，不等于物理结合、药理效应或疾病因果关系；channels 为各证据渠道归一化分值",
+  "files": {
+    "nodes.json": "12d486190e99022d467e32876bfb3353edbd6f5cd0c12872fc182690b6a02b51",
+    "edges.json": "a0c5c8aee60da6f733ec53c929d6cfa7b17eea430f15f6539018a643bb981aa0"
+  }
+}

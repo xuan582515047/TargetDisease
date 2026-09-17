@@ -1,0 +1,22 @@
+{
+  "version": "1",
+  "fetch_date": "2026-09-16",
+  "source": "Open Targets Platform",
+  "source_url": "https://platform.opentargets.org/",
+  "api_endpoint": "https://api.platform.opentargets.org/api/v4/graphql",
+  "license": "CC BY 4.0",
+  "supported_datatypes": [
+    "affected_pathway",
+    "animal_model",
+    "clinical",
+    "genetic_association",
+    "genetic_literature",
+    "literature"
+  ],
+  "score_semantics": "evidence.score 为 Open Targets 0~1 归一化关联分；resource_score 为数据源原始分值，含义因数据源而异；targets[].disease_scores 为疾病—靶点总体关联分（0~1）",
+  "files": {
+    "diseases.json": "e1b56352c3473eaa0249f50022def44f087ecde846ebaeb178e287ef98d5a846",
+    "targets.json": "bdeefe5a883b71cf90c6423ec475e96d941bb93a18578bd3931e65d72d23156c",
+    "evidence.json": "047455f35de30eeedb42d5a33d867c499999ad387e33d4ab94827a084582e713"
+  }
+}
