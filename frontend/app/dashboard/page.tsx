@@ -1,140 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Network, FolderOpen, Activity, KeyRound, Crosshair } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { toast } from "sonner";
+import { ArrowRight, ArrowUpRight, Check, Crosshair, FolderOpen, KeyRound, Clock3, Search, Activity, Plus, Layers3 } from "lucide-react";
 import { api, type CredentialStatus, type Project, type Run } from "@/lib/api";
 
-const STATUS_LABEL: Record<string, string> = {
-  queued: "排队中",
-  running: "运行中",
-  completed: "已完成",
-  failed: "失败",
-};
-
+const labels: Record<string,string> = {queued:"排队中",running:"运行中",completed:"已完成",failed:"失败"};
 export default function DashboardPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [cred, setCred] = useState<CredentialStatus | null>(null);
-
-  const load = useCallback(async () => {
-    const [p, r, c] = await Promise.allSettled([
-      api.projects.list(),
-      api.runs.list(),
-      api.credentials.status(),
-    ]);
-    if (p.status === "rejected" || r.status === "rejected") {
-      toast.error("部分数据加载失败，请刷新重试");
-    }
-    setProjects(p.status === "fulfilled" ? p.value : []);
-    setRuns(r.status === "fulfilled" ? r.value : []);
-    setCred(c.status === "fulfilled" ? c.value : null);
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return (
-    <div className="research-dashboard">
-      <div className="workspace-heading">
-        <div>
-          <p className="workspace-eyebrow">OVERVIEW / 研究概览</p>
-          <h1>研究工作台</h1>
-          <p>从研究问题出发，识别并优选可解释的候选靶点。</p>
-        </div>
-        <Link href="/target-discovery" className="workspace-outline-link">
-          <Crosshair size={16} /> 新建靶点识别 <ArrowRight size={15} />
-        </Link>
-      </div>
-
-      <div className="dashboard-stats">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FolderOpen size={17} />研究项目
-            </CardTitle>
-            <CardDescription>你的项目数</CardDescription>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold text-primary">{projects.length}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity size={17} />靶点分析
-            </CardTitle>
-            <CardDescription>已运行的识别任务</CardDescription>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold text-primary">{runs.length}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <KeyRound size={17} />模型凭据
-            </CardTitle>
-            <CardDescription>DeepSeek 凭据状态</CardDescription>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold text-primary">
-            {cred?.configured ? (cred.validated ? "已验证" : "已配置") : "未配置"}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="recent-runs-panel">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2"><Network size={18} />最近运行</CardTitle>
-            <span className="text-xs text-muted-foreground">最近 {Math.min(runs.length, 10)} 条记录</span>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {runs.length === 0 && (
-            <div className="runs-empty">
-              <span className="empty-icon"><Crosshair size={25} /></span>
-              <div>
-                <h3>你的第一条靶点优选，从这里开始</h3>
-                <p>输入研究问题并选择疾病，识别种子靶点并扩展候选。</p>
-              </div>
-              <Link href="/target-discovery">创建首次识别 <ArrowRight size={15} /></Link>
-            </div>
-          )}
-          {runs.slice(0, 10).map((r) => {
-            const disease = (r.results_json?.disease?.name_zh) || (r.intermediate_json?.disease_id as string) || "—";
-            return (
-              <div
-                key={r.id}
-                className="flex items-center justify-between border-b border-border py-2 text-sm last:border-0"
-              >
-                <div>
-                  <span className="font-medium">{disease}</span>
-                  <span className="ml-2 text-muted-foreground">
-                    {new Date(r.created_at).toLocaleString("zh-CN")}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-muted-foreground">{STATUS_LABEL[r.status] ?? r.status}</span>
-                  <Link className="text-primary underline" href={`/target-discovery/${r.id}`}>
-                    查看结果
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
-
-      <footer className="workspace-footer">
-        <span>靶研助手 · 研究工作空间</span>
-        <span>研究问题 → 种子靶点 → 网络扩展 → 证据核查 → 报告</span>
-      </footer>
+  const [projects,setProjects]=useState<Project[]>([]);
+  const [runs,setRuns]=useState<Run[]>([]);
+  const [cred,setCred]=useState<CredentialStatus|null>(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  const [filter,setFilter]=useState("all");
+  const [query,setQuery]=useState("");
+  useEffect(()=>{let active=true;Promise.allSettled([api.projects.list(),api.runs.list(),api.credentials.status()]).then(([p,r,c])=>{if(!active)return;setProjects(p.status==="fulfilled"?p.value:[]);setRuns(r.status==="fulfilled"?r.value:[]);setCred(c.status==="fulfilled"?c.value:null);if(p.status==="rejected"||r.status==="rejected"||c.status==="rejected")setError("部分数据未能加载，请刷新页面重试。");setLoading(false)});return()=>{active=false}},[]);
+  const completed=runs.filter(r=>r.status==="completed").length;
+  const activeRuns=runs.filter(r=>["queued","running"].includes(r.status)).length;
+  const filtered=runs.filter(r=>(filter==="all"||r.status===filter||(filter==="active"&&["queued","running"].includes(r.status)))&&`${r.results_json?.disease?.name_zh||r.intermediate_json?.disease_id||""} ${projects.find(p=>p.id===r.project_id)?.name||""}`.toLowerCase().includes(query.toLowerCase()));
+  return <div className="studio-page">
+    <header className="studio-heading"><div><h1>工作台</h1><p>查看分析进度，管理研究项目和候选靶点。</p></div><Link href="/target-discovery" className="studio-button"><Plus size={17}/>新建分析</Link></header>
+    {error&&<p className="studio-alert" role="alert">{error}</p>}
+    <div className="studio-metrics" aria-busy={loading}>{[[FolderOpen,"研究项目",projects.length],[Activity,"分析任务",runs.length],[Check,"已完成",completed],[Clock3,"进行中",activeRuns]].map(([Icon,label,value])=>{const Symbol=Icon as typeof FolderOpen;return <div key={String(label)}><Symbol size={19}/><span>{String(label)}</span><strong>{loading?"—":String(value)}</strong></div>})}</div>
+    <div className="studio-bento">
+      <section className="studio-ready studio-panel"><div className="studio-panel-title"><h2>模型连接</h2></div><p>分析前请确认模型连接可用。</p><div className={`ready-item ${cred?.validated?"done":""}`}><span>{cred?.validated?<Check size={15}/>:<KeyRound size={15}/>}</span><div><b>{loading?"读取模型状态…":cred?.validated?"模型连接已验证":cred?.configured?"凭据已保存，待验证":"连接 DeepSeek 模型"}</b><small>{cred?.validated?"可以开始靶点分析":"用于从证据池识别种子靶点"}</small></div></div><Link href={cred?.validated?"/target-discovery":"/settings/api-keys"}>{cred?.validated?"开始研究":"完成模型配置"}<ArrowRight size={17}/></Link></section>
+      <section className="studio-runs studio-panel"><div className="studio-panel-title"><div><h2>研究任务</h2><p>查看最近的分析任务及结果。</p></div><span className="studio-count">{loading?"—":runs.length} 条记录</span></div><div className="studio-task-tools"><div className="studio-segments" role="group" aria-label="按任务状态筛选">{[["all","全部"],["active","进行中"],["completed","已完成"],["failed","失败"]].map(([value,label])=><button key={value} aria-pressed={filter===value} onClick={()=>setFilter(value)}>{label}</button>)}</div><label className="studio-search"><Search size={15}/><input aria-label="搜索研究任务" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索疾病或项目"/></label></div>
+      {loading?<div className="studio-empty" role="status">正在读取研究任务…</div>:filtered.length===0?<div className="studio-empty"><div className="empty-orbits"><Crosshair size={26}/></div><h3>{runs.length?"没有匹配的任务":"暂无分析任务"}</h3><p>{runs.length?"尝试切换状态或修改搜索关键词。":"新建分析后，可在这里查看进度和结果。"}</p>{runs.length?<button className="studio-text-button" onClick={()=>{setFilter("all");setQuery("")}}>清除筛选 <ArrowRight size={15}/></button>:<Link href="/target-discovery" className="studio-text-button">新建分析 <ArrowRight size={15}/></Link>}</div>:<div className="studio-run-list">{filtered.slice(0,10).map(r=><Link href={`/target-discovery/${r.id}`} key={r.id} className="studio-run-row"><span className="run-symbol"><Crosshair size={18}/></span><div><b>{r.results_json?.disease?.name_zh||(r.intermediate_json?.disease_id as string)||"靶点优选分析"}</b><small>{new Date(r.created_at).toLocaleString("zh-CN")}</small></div><span className={`studio-status ${r.status}`}>{labels[r.status]||r.status}</span><ArrowUpRight size={16}/></Link>)}</div>}</section>
+      <section className="studio-projects studio-panel"><div className="studio-panel-title"><h2>最近项目</h2><Link href="/projects" aria-label="查看所有项目"><ArrowUpRight size={19}/></Link></div>{loading?<p>正在读取项目…</p>:projects.length?<div className="studio-project-list">{projects.slice(0,3).map(p=><Link href={`/target-discovery?project_id=${p.id}`} key={p.id}><FolderOpen size={19}/><div><b>{p.name}</b><small>{p.primary_disease||"研究项目"}</small></div><ArrowRight size={15}/></Link>)}</div>:<div className="studio-project-empty"><Layers3 size={32}/><h3>暂无研究项目</h3><p>创建项目，按疾病或研究方向整理分析任务。</p><Link href="/projects">管理研究项目 <ArrowRight size={15}/></Link></div>}<div className="studio-project-foot"><KeyRound size={15}/><span>模型配置</span><Link href="/settings/api-keys">{loading?"读取中":cred?.validated?"已验证":cred?.configured?"待验证":"未连接"}<ArrowRight size={13}/></Link></div></section>
     </div>
-  );
+  </div>;
 }

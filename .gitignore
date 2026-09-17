@@ -23,6 +23,7 @@ backend/data/raw-cache/
 # ===== Node / Next.js =====
 node_modules/
 .next/
+.next-local/
 out/
 build/
 next-env.d.ts
@@ -39,3 +40,5 @@ Thumbs.db
 # ===== Docker 卷数据 =====
 postgres_data/
 scientific_artifacts/
+backend/local.db*
+artifacts/qa/

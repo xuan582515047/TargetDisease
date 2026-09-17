@@ -4,6 +4,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Sidebar from "@/components/sidebar";
 import { api } from "@/lib/api";
+import { ChevronRight, FlaskConical, BookOpen } from "lucide-react";
+import Link from "next/link";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -44,7 +46,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="workspace-shell">
       <Sidebar />
-      <main className="workspace-main">{children}</main>
+      <main className="workspace-main">
+        <header className="lab-topbar"><span><FlaskConical size={16} />研究空间<ChevronRight size={13} /><b>{pathname.startsWith("/target-discovery") ? "靶点探索" : pathname.startsWith("/settings") ? "模型配置" : pathname.startsWith("/projects") ? "研究项目" : "工作台"}</b></span><Link href="/#workflow"><BookOpen size={15} />探索指南</Link></header>
+        {children}
+      </main>
     </div>
   );
 }
