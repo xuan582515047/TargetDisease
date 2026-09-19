@@ -1,0 +1,70 @@
+# 生产编排：仅对外暴露前端一个端口，后端与数据库只在内部网络可达。
+# 用法：
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须设置}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-app}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必须设置}@postgres:5432/${POSTGRES_DB:-app}
+      SECRET_KEY: ${APP_SECRET_KEY:?APP_SECRET_KEY 必须设置}
+      CREDENTIAL_MASTER_KEY: ${APP_CREDENTIAL_MASTER_KEY:?APP_CREDENTIAL_MASTER_KEY 必须设置}
+      PHARMAGENTS_ARTIFACT_ROOT: /app/artifacts
+    volumes:
+      - scientific_artifacts:/app/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        # 构建期注入：rewrites 目标在构建时固化
+        BACKEND_URL: http://backend:8000
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      # 默认仅本机监听，由宿主 Nginx 反向代理并终结 HTTPS。
+      # 若暂无域名与 Nginx，可改为 "3001:3000" 直接用 IP 访问。
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-3001}:3000"
+    depends_on:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+  scientific_artifacts:

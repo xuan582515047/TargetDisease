@@ -28,6 +28,45 @@ Windows 本地运行（无需 Docker）：参见 [本地启动与比赛演示](d
 - 前端: http://localhost:3001
 - 后端: http://localhost:8000（健康检查 `/healthz`）
 
+## 生产部署（阿里云 ECS 等 Linux 服务器）
+
+生产使用独立的 `docker-compose.prod.yml`：前端为 `next build` + `next start` 生产构建，
+仅对外暴露前端一个端口，后端与数据库只在容器内部网络可达，浏览器经前端同源代理访问 `/api/*`。
+
+```bash
+# 1. 准备环境变量（务必替换 change-me 占位值）
+cp .env.example .env
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"                              # APP_SECRET_KEY
+python3 -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"    # APP_CREDENTIAL_MASTER_KEY
+
+# 2. 构建并启动
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. 首次必须执行数据库迁移
+docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+
+# 4. 查看状态与日志
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs backend --tail 100
+```
+
+访问 `http://<服务器公网IP>:3001`（需安全组放行该端口）。若配置域名与 HTTPS，
+把 `.env` 中 `FRONTEND_BIND` 保持为 `127.0.0.1`，由宿主 Nginx 反向代理到 `127.0.0.1:3001`，
+安全组只需放行 `80` / `443`。
+
+常用运维命令：
+
+```bash
+docker compose -f docker-compose.prod.yml restart backend                 # 重启后端
+docker compose -f docker-compose.prod.yml up -d --build frontend          # 前端改动后重建
+docker compose -f docker-compose.prod.yml down                            # 停止（保留数据卷）
+docker compose -f docker-compose.prod.yml exec postgres \
+  pg_dump -U appuser app > backup_$(date +%F).sql                         # 数据库备份
+```
+
+> 数据持久化在 `postgres_data`、`scientific_artifacts` 两个数据卷中；
+> `down -v` 会清空数据。`.env` 中的 `APP_CREDENTIAL_MASTER_KEY` 请单独备份，丢失后已保存的模型 Key 无法解密。
+
 ## 数据准备
 
 平台依赖两个本地快照，均以版本化 JSON 形式保存在 `backend/data/` 下，程序校验后激活。
